@@ -1,0 +1,781 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<beans xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns="http://www.springframework.org/schema/beans"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:jee="http://www.springframework.org/schema/jee"
+       xmlns:jms="http://www.springframework.org/schema/jms"
+       xmlns:beans="http://www.springframework.org/schema/beans"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+                http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+                http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd
+                http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd
+		        http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd
+		        http://www.springframework.org/schema/jee http://www.springframework.org/schema/jee/spring-jee.xsd
+                http://www.springframework.org/schema/jms http://www.springframework.org/schema/jms/spring-jms.xsd
+                http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+http://www.springframework.org/schema/jms ">
+
+    <!-- <context:property-placeholder location="file:${thy.appdir}/aodbscheduler/conf/application.properties" /> -->
+    <context:property-placeholder
+            location="file:${thy.appdir}/aodbscheduler/conf/application.properties,file:${thy.appdir}/aodbscheduler/conf/quartz.properties"/>
+
+    <context:annotation-config/>
+    <tx:annotation-driven transaction-manager="transactionManager"/>
+
+    <bean class="com.thy.aodb.scheduler.support.RestTemplateFactory" id="restFactory">
+        <property name="readTimeout" value="${restconfig.readtimeout}"/>
+        <property name="connectionTimeout" value="${restconfig.connectiontimeout}"/>
+        <property name="rootURL" value="${restconfig.rootURL}"/>
+        <property name="httpPort" value="${restconfig.httpPort}"/>
+        <property name="schema" value="${restconfig.schema}"/>
+        <property name="username" value="${restconfig.username}"/>
+        <property name="password" value="${restconfig.password}"/>
+    </bean>
+
+    <bean class="com.thy.aodb.scheduler.support.ExtendedRestTemplateFactory" id="extendedRestFactory">
+        <property name="readTimeout" value="${restconfig.extendedreadtimeout}"/>
+        <property name="connectionTimeout" value="${restconfig.connectiontimeout}"/>
+        <property name="rootURL" value="${restconfig.rootURL}"/>
+        <property name="httpPort" value="${restconfig.httpPort}"/>
+        <property name="schema" value="${restconfig.schema}"/>
+        <property name="username" value="${restconfig.username}"/>
+        <property name="password" value="${restconfig.password}"/>
+    </bean>
+
+    <!-- jndi configuration  -->
+
+    <beans:bean id="dataSource" class="org.springframework.jndi.JndiObjectFactoryBean">
+        <beans:property name="jndiName" value="${jndi.datasource}"/>
+    </beans:bean>
+
+    <!--
+        Configuration for Hibernate/JPA
+    -->
+
+    <beans:bean id="entityManagerFactory" class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean">
+        <beans:property name="packagesToScan" value="com.thy.aodb"/>
+        <beans:property name="dataSource" ref="dataSource"/>
+        <beans:property name="jpaDialect">
+            <beans:bean class="org.springframework.orm.jpa.vendor.HibernateJpaDialect"/>
+        </beans:property>
+        <beans:property name="jpaVendorAdapter">
+            <beans:bean class="org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter">
+                <beans:property name="showSql" value="${hibernate.show_sql}"/>
+                <beans:property name="generateDdl" value="false"/>
+                <beans:property name="databasePlatform" value="${hibernate.dialect}"/>
+            </beans:bean>
+        </beans:property>
+    </beans:bean>
+
+    <beans:bean id="transactionManager" class="org.springframework.orm.jpa.JpaTransactionManager">
+        <beans:property name="entityManagerFactory" ref="entityManagerFactory"/>
+        <beans:property name="dataSource" ref="dataSource"/>
+    </beans:bean>
+
+    <!-- QUARTZ SCHEDULER SETTINGS -->
+    <bean id="baseQuartzJob" class="com.thy.aodb.scheduler.jobs.BaseQuartzJob" abstract="true"/>
+
+    <!-- FLIGHTINFO JOB -->
+    <bean id="flightInfoJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.FlightInfoJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="jobName" value="${flightInfo.jobname}"/>
+                <entry key="aodbFeedOutFlightInfoWSUrl" value="${flightInfo.aodbFeedOutFlightInfoWSUrl}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="flightInfoJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${flightInfo.cron}"/>
+        <property name="jobDetail" ref="flightInfoJobDetail"/>
+    </bean>
+    <!-- FLIGHTINFO JOB -->
+
+    <!-- CODESHARE_GENERATOR JOBS -->
+
+    <bean id="codeshareJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.codeshare.CodeshareJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="interval" value="${codeshare.interval}"/>
+                <entry key="startFlightNumber" value="${codeshare.startFlightNumber}"/>
+                <entry key="codeshare_url" value="${codeshare.url}"/>
+                <entry key="retryOnException" value="${codeshare.retryOnException}"/>
+                <entry key="retryCount" value="${codeshare.retryCount}"/>
+                <entry key="retryIntervalInMinutes" value="${codeshare.retryIntervalInMinutes}"/>
+            </map>
+        </property>
+    </bean>
+
+    <bean id="codeshareJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${codeshare.cron}"/>
+        <property name="jobDetail" ref="codeshareJobDetail"/>
+    </bean>
+    <!-- CODESHARE_GENERATOR JOBS END-->
+
+    <!-- DEPARR JOB START-->
+    <bean id="DepArrCodeshareJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.deparr.DepArrCodeshareJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${depArrCodeshare.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="DepArrCodeshareJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${depArrCodeshare.cron}"/>
+        <property name="jobDetail" ref="DepArrCodeshareJobDetail"/>
+    </bean>
+    <!-- DEPARR JOB END-->
+
+    <!-- TRANSIT JOB -->
+    <bean id="transitJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.transit.TransitJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="transit_url" value="${transit.url}"/>
+                <entry key="retryOnException" value="${transit.retryOnException}"/>
+                <entry key="retryCount" value="${transit.retryCount}"/>
+                <entry key="retryIntervalInMinutes" value="${transit.retryIntervalInMinutes}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="transitJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${transit.cron}"/>
+        <property name="jobDetail" ref="transitJobDetail"/>
+    </bean>
+    <!-- TRANSIT JOB -->
+
+    <!-- DHMI_IST JOB -->
+    <bean id="DHMI_ISTJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.dhmi.DHMI_ISTJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="dhmi_url" value="${dhmi.url}"/>
+                <entry key="retryOnException" value="${dhmi.retryOnException}"/>
+                <entry key="retryCount" value="${dhmi.retryCount}"/>
+                <entry key="retryIntervalInMinutes" value="${dhmi.retryIntervalInMinutes}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="DHMI_ISTJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${dhmi.cron}"/>
+        <property name="jobDetail" ref="DHMI_ISTJobDetail"/>
+    </bean>
+    <!-- DHMI_IST JOB -->
+
+    <!-- DHMI_ESB JOB -->
+    <bean id="DHMI_ESBJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.dhmi.DHMI_ESBJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="dhmi_url" value="${dhmi.url}"/>
+                <entry key="retryOnException" value="${dhmi.retryOnException}"/>
+                <entry key="retryCount" value="${dhmi.retryCount}"/>
+                <entry key="retryIntervalInMinutes" value="${dhmi.retryIntervalInMinutes}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="DHMI_ESBJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${dhmi.cron}"/>
+        <property name="jobDetail" ref="DHMI_ESBJobDetail"/>
+    </bean>
+    <!-- DHMI_ESB JOB -->
+
+    <!-- NETLINE JOBS -->
+    <bean id="NetlinePaxCargoJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.netline.NetlinePaxCargoJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="netlinePaxCargo_URL" value="${netline.paxcargo.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="NetlineAjetPaxCargoJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.netline.NetlineAnadoluJetPaxCargoJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="netlinePaxCargo_URL" value="${netline.ajet.paxcargo.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="NetlineTransitJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.netline.NetlineTransitJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="netlineTransit_URL" value="${netline.transit.url}"/>
+                <entry key="retryOnException" value="${netline.retryOnException}"/>
+                <entry key="retryCount" value="${netline.retryCount}"/>
+                <entry key="retryIntervalInMinutes" value="${netline.retryIntervalInMinutes}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="NetlinePaxCargoJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${netline.paxcargo.cron}"/>
+        <property name="jobDetail" ref="NetlinePaxCargoJobDetail"/>
+    </bean>
+    <bean id="NetlineAjetPaxCargoJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${netline.paxcargo.cron}"/>
+        <property name="jobDetail" ref="NetlineAjetPaxCargoJobDetail"/>
+    </bean>
+    <bean id="NetlineTransitJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${netline.transit.cron}"/>
+        <property name="jobDetail" ref="NetlineTransitJobDetail"/>
+    </bean>
+    <!-- NETLINE JOBS -->
+
+    <!-- MDM JOBS -->
+    <bean id="SAPAircraftsJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.mdm.sap.AircraftsJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="mdmSAPAircraftsURL" value="${mdmSAPAircrafts.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="SAPAircraftsJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${mdmSAPAircrafts.cron}"/>
+        <property name="jobDetail" ref="SAPAircraftsJobDetail"/>
+    </bean>
+
+    <bean id="SAPSectorsJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.mdm.sap.SectorsJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="mdmSAPSectorsURL" value="${mdmSAPSectors.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="SAPSectorsJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${mdmSAPSectors.cron}"/>
+        <property name="jobDetail" ref="SAPSectorsJobDetail"/>
+    </bean>
+
+    <bean id="SAPTaxiTimesJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.mdm.sap.TaxiTimesJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="mdmSAPTaxiTimesURL" value="${mdmSAPTaxiTimes.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="SAPTaxiTimesJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${mdmSAPTaxiTimes.cron}"/>
+        <property name="jobDetail" ref="SAPTaxiTimesJobDetail"/>
+    </bean>
+
+
+    <!-- TaxiTimeCalculatorJob -->
+    <bean id="TaxiTimeCalculatorJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.mdm.TaxiTimeCalculatorJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${TaxiTimeCalculator.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="TaxiTimeCalculatorJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${TaxiTimeCalculator.cron}"/>
+        <property name="jobDetail" ref="TaxiTimeCalculatorJobDetail"/>
+    </bean>
+
+    <!-- SectorFlightBlockTimeCalculatorJob -->
+    <bean id="SectorFlightBlockTimeCalculatorJobDetail"
+          class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.mdm.SectorFlightBlockTimeCalculatorJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${SectorFlightBlockTimeCalculator.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="SectorFlightBlockTimeCalculatorJobTrigger"
+          class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${SectorFlightBlockTimeCalculator.cron}"/>
+        <property name="jobDetail" ref="SectorFlightBlockTimeCalculatorJobDetail"/>
+    </bean>
+
+    <!-- FPM Planned SectorAircraftTimeCalculatorJob -->
+    <bean id="SectorAircraftTimeCalculatorJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.mdm.SectorAircraftTimeCalculatorJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${SectorAircraftTimeCalculator.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="SectorAircraftTimeCalculatorJobTrigger"
+          class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${SectorAircraftTimeCalculator.cron}"/>
+        <property name="jobDetail" ref="SectorAircraftTimeCalculatorJobDetail"/>
+    </bean>
+
+    <!-- FPM Planned SectorAircraftFuelCalculatorJob -->
+    <bean id="SectorAircraftFuelCalculatorJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.mdm.SectorAircraftFuelCalculatorJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${SectorAircraftFuelCalculator.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="SectorAircraftFuelCalculatorJobTrigger"
+          class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${SectorAircraftFuelCalculator.cron}"/>
+        <property name="jobDetail" ref="SectorAircraftFuelCalculatorJobDetail"/>
+    </bean>
+
+    <!-- CRM Planned SectorTimeCalculatorJob -->
+    <bean id="SectorTimeCalculatorJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.mdm.crm.SectorTimeCalculatorJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${SectorTimeCalculatorJob.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="SectorTimeCalculatorJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${SectorTimeCalculatorJob.cron}"/>
+        <property name="jobDetail" ref="SectorTimeCalculatorJobDetail"/>
+    </bean>
+
+    <!-- NETLINEAirportsJob -->
+    <bean id="NetlineAirportsJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.mdm.netline.NetlineAirportsJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${NetlineAirports.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="NetlineAirportsJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${NetlineAirports.cron}"/>
+        <property name="jobDetail" ref="NetlineAirportsJobDetail"/>
+    </bean>
+
+
+    <!-- MDM JOBS END-->
+
+    <!-- HEARTBEAT JOB -->
+    <bean id="HeartBeatJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.HeartBeatJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="aodbfeedout_heartbeaturl" value="${heartbeat.aodbfeedouturl}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="HeartBeatJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${heartbeat.cron}"/>
+        <property name="jobDetail" ref="HeartBeatJobDetail"/>
+    </bean>
+    <!-- HEARTBEAT JOB -->
+
+    <!-- HAZELCAST JOB -->
+    <bean id="HazelcastUpdaterJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.internal.HazelcastUpdaterJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${hazelcastUpdater.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="HazelcastUpdaterJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${hazelcastUpdater.cron}"/>
+        <property name="jobDetail" ref="HazelcastUpdaterJobDetail"/>
+    </bean>
+    <!-- HAZELCAST JOB -->
+
+    <!-- AODB JOB START-->
+    <!-- AODB JOB END-->
+
+    <!-- TAV ROTA JOB START-->
+    <bean id="TAVFlightJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.tav.TAVFlightJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${TAVFlight.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="TAVFlightJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${TAVFlight.cron}"/>
+        <property name="jobDetail" ref="TAVFlightJobDetail"/>
+    </bean>
+
+    <!-- TAV ROTA JOBS END-->
+
+
+    <!-- HEAS GROUND INFO JOB START-->
+
+    <bean id="HeasGroundInfoJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.heas.HeasGroundInfoJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${heas.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="HeasGroundInfoJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${heas.cron}"/>
+        <property name="jobDetail" ref="HeasGroundInfoJobDetail"/>
+    </bean>
+
+    <!-- HEAS GROUND INFO JOB END-->
+
+
+    <!-- BAGMANAGER JOB START-->
+    <bean id="BagManagerNewDayFlightsJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.bagmanager.BagManagerNewDayFlightsJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${bagmanager.url}"/>
+                <entry key="retryOnException" value="${bagmanagerNewDay.retryOnException}"/>
+                <entry key="retryCount" value="${bagmanagerNewDay.retryCount}"/>
+                <entry key="retryIntervalInMinutes" value="${bagmanagerNewDay.retryIntervalInMinutes}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="BagManagerNewDayFlightsJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${bagmanagerNewDay.cron}"/>
+        <property name="jobDetail" ref="BagManagerNewDayFlightsJobDetail"/>
+    </bean>
+
+    <bean id="BagManagerUpcommingFlightsJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.bagmanager.BagManagerUpcommingFlightsJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${bagmanager.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="BagManagerUpcommingFlightsJobTrigger"
+          class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${bagmanagerUpcomming.cron}"/>
+        <property name="jobDetail" ref="BagManagerUpcommingFlightsJobDetail"/>
+    </bean>
+
+    <bean id="BagManagerActualFlightsJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.bagmanager.BagManagerActualFlightsJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${bagmanager.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="BagManagerActualFlightsJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${bagmanagerActual.cron}"/>
+        <property name="jobDetail" ref="BagManagerActualFlightsJobDetail"/>
+    </bean>
+    <!-- BAGMANAGER JOBS END-->
+
+    <!-- ACARS TOD JOB START-->
+    <bean id="AcarsUpcommingFlightsJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.acars.AcarsUpcommingFlightsJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${acarstod.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="AcarsUpcommingFlightsJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${acarstod.cron}"/>
+        <property name="jobDetail" ref="AcarsUpcommingFlightsJobDetail"/>
+    </bean>
+    <!-- ACARS TOD JOB END-->
+
+    <!-- ACARS AIRBORNED FLIGHT JOB START-->
+    <bean id="AcarsAirbornedFlightJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.acars.AcarsAirbornedFlightJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${acarsairborned.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="AcarsAirbornedFlightJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${acarsairborned.cron}"/>
+        <property name="jobDetail" ref="AcarsAirbornedFlightJobDetail"/>
+    </bean>
+    <!-- ACARS AIRBORNED FLIGHT JOB END-->
+
+    <!-- NetlineAircraftSync JOB START-->
+    <bean id="NetlineAircraftSyncJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.netline.NetlineAircraftSyncJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${netlineaircraft.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="NetlineAircraftSyncJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${netlineaircraft.cron}"/>
+        <property name="jobDetail" ref="NetlineAircraftSyncJobDetail"/>
+    </bean>
+    <!-- NetlineAircraftSync JOB END-->
+
+    <!-- DCS FLIGHT JOB START-->
+    <bean id="DCSUpcommingFlightsJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.dcs.DCSUpcommingFlightsJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${dcs.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="DCSUpcommingFlightsJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${dcs.cron}"/>
+        <property name="jobDetail" ref="DCSUpcommingFlightsJobDetail"/>
+    </bean>
+    <!-- DCS FLIGHT JOB END-->
+
+    <!-- DCS BOARDING JOB START-->
+    <!--
+    <bean id="DCSBoardingJobManager" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.dcs.DCSBoardingJobManager"/>
+        <property name="durability" value="true"/>
+    </bean>
+    <bean id="DCSBoardingJob" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.dcs.DCSBoardingJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${dcs.boarding.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="DCSBoardingJobManagerTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${dcs.boarding.cron}"/>
+        <property name="jobDetail" ref="DCSBoardingJobManager"/>
+    </bean>
+     -->
+    <!-- DCS BOARDING JOB END-->
+
+    <!-- SAP AFIS JOB START-->
+    <bean id="SAPAfisJobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <property name="jobClass" value="com.thy.aodb.scheduler.jobs.sap.SAPAfisDataJob"/>
+        <property name="durability" value="true"/>
+        <property name="jobDataAsMap">
+            <map>
+                <entry key="url" value="${SAPAfis.url}"/>
+            </map>
+        </property>
+    </bean>
+    <bean id="SAPAfisJobTrigger" class="com.thy.aodb.scheduler.core.PersistableCronTriggerFactoryBean">
+        <property name="cronExpression" value="${SAPAfis.cron}"/>
+        <property name="jobDetail" ref="SAPAfisJobDetail"/>
+    </bean>
+
+    <!-- SAP AFIS JOB START-->
+
+    <!-- QUARTZ SCHEDULER SETTINGS FOR PRODUCTION -->
+
+    <bean id="quartzDbInitializer" class="org.springframework.jdbc.datasource.init.DataSourceInitializer">
+        <property name="dataSource" ref="dataSource"/>
+        <property name="enabled" value="true"/>
+        <property name="databasePopulator">
+            <bean class="org.springframework.jdbc.datasource.init.ResourceDatabasePopulator">
+                <property name="continueOnError" value="true"/>
+                <property name="ignoreFailedDrops" value="true"/>
+                <property name="sqlScriptEncoding" value="UTF-8"/>
+                <property name="scripts">
+                    <array>
+                        <value type="org.springframework.core.io.Resource">
+                            classpath:quartz/quartzClearDBScript.sql
+                        </value>
+                    </array>
+                </property>
+            </bean>
+        </property>
+    </bean>
+
+    <bean id="scheduler" class="org.springframework.scheduling.quartz.SchedulerFactoryBean"
+          depends-on="quartzDbInitializer" lazy-init="false">
+
+        <!-- THIS SECTION FOR PRODUCTION -->
+        <property name="configLocation" value="file:${thy.appdir}/aodbscheduler/conf/quartz.properties"/>
+        <property name="dataSource" ref="dataSource"/>
+        <property name="transactionManager" ref="transactionManager"/>
+        <property name="applicationContextSchedulerContextKey" value="applicationContext"/>
+        <property name="autoStartup" value="true"/>
+        <property name="waitForJobsToCompleteOnShutdown" value="true"/>
+        <property name="overwriteExistingJobs" value="true"/>
+        <property name="schedulerName" value="quartzScheduler"/>
+        <!-- THIS SECTION FOR PRODUCTION -->
+
+        <!-- THIS SECTION FOR DEVELOPMENT
+        <property name="quartzProperties">
+            <props>
+                <prop key="org.quartz.threadPool.class">org.quartz.simpl.SimpleThreadPool</prop>
+                <prop key="org.quartz.threadPool.threadCount">10</prop>
+            </props>
+        </property>
+        THIS IS FOR DEVELOPMENT -->
+
+        <property name="jobFactory">
+            <bean class="com.thy.aodb.scheduler.core.AutowiringSpringBeanJobFactory"/>
+        </property>
+        <property name="jobDetails">
+            <list>
+                <ref bean="flightInfoJobDetail"/>
+                <ref bean="codeshareJobDetail"/>
+
+                <ref bean="DepArrCodeshareJobDetail"/>
+                <ref bean="transitJobDetail"/>
+                <ref bean="DHMI_ISTJobDetail"/>
+                <ref bean="DHMI_ESBJobDetail"/>
+
+                <ref bean="NetlinePaxCargoJobDetail"/>
+                <ref bean="NetlineAjetPaxCargoJobDetail"/>
+                <ref bean="NetlineTransitJobDetail"/>
+
+                <ref bean="SAPAircraftsJobDetail"/>
+                <ref bean="SAPSectorsJobDetail"/>
+                <ref bean="SAPTaxiTimesJobDetail"/>
+
+                <ref bean="TAVFlightJobDetail"/>
+
+                <ref bean="BagManagerNewDayFlightsJobDetail"/>
+                <ref bean="BagManagerUpcommingFlightsJobDetail"/>
+                <ref bean="BagManagerActualFlightsJobDetail"/>
+
+                <ref bean="TaxiTimeCalculatorJobDetail"/>
+                <ref bean="SectorFlightBlockTimeCalculatorJobDetail"/>
+                <ref bean="SectorAircraftTimeCalculatorJobDetail"/>
+                <ref bean="SectorAircraftFuelCalculatorJobDetail"/>
+                <ref bean="SectorTimeCalculatorJobDetail"/>
+                <ref bean="NetlineAirportsJobDetail"/>
+
+                <ref bean="AcarsUpcommingFlightsJobDetail"/>
+                <ref bean="AcarsAirbornedFlightJobDetail"/>
+                <ref bean="HeasGroundInfoJobDetail"/>
+
+                <ref bean="HazelcastUpdaterJobDetail"/>
+                <ref bean="DCSUpcommingFlightsJobDetail"/>
+                <ref bean="NetlineAircraftSyncJobDetail"/>
+
+                <ref bean="SAPAfisJobDetail"/>
+                <!--
+		        <ref bean="DCSBoardingJob" />
+    			<ref bean="DCSBoardingJobManager" />
+    			 -->
+
+
+            </list>
+        </property>
+        <property name="triggers">
+            <list>
+                <ref bean="flightInfoJobTrigger"/>
+                <ref bean="codeshareJobTrigger"/>
+
+                <ref bean="transitJobTrigger"/>
+                <ref bean="DHMI_ISTJobTrigger"/>
+                <ref bean="DHMI_ESBJobTrigger"/>
+
+                <ref bean="NetlinePaxCargoJobTrigger"/>
+                <ref bean="NetlineAjetPaxCargoJobTrigger"/>
+                <ref bean="NetlineTransitJobTrigger"/>
+
+                <ref bean="TAVFlightJobTrigger"/>
+
+                <ref bean="BagManagerNewDayFlightsJobTrigger"/>
+                <ref bean="BagManagerUpcommingFlightsJobTrigger"/>
+                <ref bean="BagManagerActualFlightsJobTrigger"/>
+
+                <ref bean="AcarsUpcommingFlightsJobTrigger"/>
+                <ref bean="AcarsAirbornedFlightJobTrigger"/>
+                <ref bean="HeasGroundInfoJobTrigger"/>
+
+                <ref bean="HazelcastUpdaterJobTrigger"/>
+
+                <ref bean="DepArrCodeshareJobTrigger"/>
+                <ref bean="DCSUpcommingFlightsJobTrigger"/>
+
+                <ref bean="SAPTaxiTimesJobTrigger"/>
+                <ref bean="TaxiTimeCalculatorJobTrigger"/>
+
+                <!-- DVS -->
+                <ref bean="SAPAircraftsJobTrigger"/>
+                <ref bean="SAPSectorsJobTrigger"/>
+                <ref bean="NetlineAirportsJobTrigger"/>
+                <ref bean="SectorFlightBlockTimeCalculatorJobTrigger"/>
+                <ref bean="SectorAircraftTimeCalculatorJobTrigger"/>
+                <ref bean="SectorAircraftFuelCalculatorJobTrigger"/>
+                <ref bean="SectorTimeCalculatorJobTrigger"/>
+                <!-- DVS -->
+
+                <ref bean="NetlineAircraftSyncJobTrigger"/>
+
+                <ref bean="SAPAfisJobTrigger"/>
+                <!--
+		       <ref bean="DCSBoardingJobManagerTrigger" />
+		        -->
+            </list>
+        </property>
+        <property name="globalTriggerListeners">
+            <list>
+                <ref bean="triggerListener"/>
+            </list>
+        </property>
+        <!-- <property name="globalJobListeners">
+        	<list>
+        		<ref bean="aodbJobChainingListener" />
+        	</list>
+    	</property> -->
+    </bean>
+
+    <bean id="triggerListener" class="com.thy.aodb.scheduler.listener.AODBTriggerListener">
+    </bean>
+    <!-- 
+    
+    <bean id="aodbJobChainingListener" class="com.thy.aodb.scheduler.listener.AODBJobChainingJobListener">
+    	<property name="name" value="AODBJobChainingJobListener"/>
+    	<property name="chainLinks">
+    		<map>
+	        	<entry>
+	        		<key><ref bean="codeshareJobDetail"/></key>
+		        		<list>
+		        			 <ref bean="codeshareGeneratorAfterTomorrowJobDetail" />
+		        		</list>
+	        	</entry>
+        	</map>
+    	</property>
+    </bean>
+    
+    -->
+    <!-- QUARTZ SCHEDULER SETTINGS -->
+
+</beans>

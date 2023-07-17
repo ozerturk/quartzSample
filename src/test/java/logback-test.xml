@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+	<!-- 
+	Message Format
+	*****************************
+	%d{HH:mm:ss.SSS} – Used to output the date of the logging event.
+	%thread			 – outputs the name of the thread that generated the logging event
+	%-5level 		 – means the level of the logging event should be left justified to a width of five characters
+	%logger{36}  	 – outputs the name of the logger at the origin of the logging event. It takes an integer as parameter. This specifies the length the converter’s algorithm  will shorten the logger name to.
+	%msg 			 – outputs the application-supplied message associated with the logging event.
+	%n 				 – outputs the platform dependent line separator character or characters.
+	%relative 		 – outputs the number of milliseconds elapsed since the start of the application until the creation of the logging event
+	*****************************
+	
+	File
+	*****************************
+	On the MS Windows platform,correct values can be specified as c:/temp/test.log or alternatively as c:\\temp\\test.log. The File option has no default value.
+	*****************************
+	
+	Appenders details : http://logback.qos.ch/manual/appenders.html
+	 -->
+	<property name="LOG_PATH" value="${thy.appdir}/aodbscheduler/logs-test" />
+	<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+		<layout class="ch.qos.logback.classic.PatternLayout">
+			<Pattern>
+				%X{source} %X{application} - %d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n
+			</Pattern>
+		</layout>
+	</appender>
+	
+	
+	<appender name="dailyRollingFileAppender" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<File>${LOG_PATH}/logs/slf4j-inboundws</File>
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<!-- daily rollover -->
+			<FileNamePattern>${LOG_PATH}/inboundws.%d{yyyy-MM-dd}.log</FileNamePattern>
+			<!-- keep 30 days' worth of history -->
+			<maxHistory>30</maxHistory>
+		</rollingPolicy>
+		<encoder>
+			<Pattern>%X{source} %X{application} - %d{HH:mm:ss.SSS} [%thread] %-5level %logger{35} - %msg %n
+			</Pattern>
+		</encoder>
+	</appender>
+	<appender name="errorDailyRollingFileAppender" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<File>${LOG_PATH}/slf4j-inboundws-error</File>
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<!-- daily rollover -->
+			<FileNamePattern>${LOG_PATH}/inboundws-error.%d{yyyy-MM-dd}.log</FileNamePattern>
+			<!-- keep 30 days' worth of history -->
+			<maxHistory>30</maxHistory>
+		</rollingPolicy>
+		<encoder>
+			<Pattern>%X{source} %X{application} - %d{HH:mm:ss.SSS} [%thread] %-5level %logger{35} - %msg %n
+			</Pattern>
+		</encoder>
+	</appender>
+	<appender name="minuteRollingFileAppender" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<File>${LOG_PATH}/inboundws-minute</File>
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+		    <!-- rollover every minute -->
+			<FileNamePattern>${LOG_PATH}/inboundws-minute.%d{yyyy-MM-dd_HH-mm}.log</FileNamePattern>
+			<!-- keep 30 minutes' worth of history -->
+			<maxHistory>30</maxHistory>			
+		</rollingPolicy>
+		<encoder>
+			<Pattern>%X{source} %X{application} - %-4relative [%thread] %-5level %logger{35} - %msg %n</Pattern>
+		</encoder> 	    
+  	</appender> 
+  	<appender name="frameworksDailyRollingFileAppender" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<File>${LOG_PATH}/slf4j-frameworks</File>
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<!-- daily rollover -->
+			<FileNamePattern>${LOG_PATH}/frameworks.%d{yyyy-MM-dd}.log</FileNamePattern>
+			<!-- keep 30 days' worth of history -->
+			<maxHistory>30</maxHistory>
+		</rollingPolicy>
+		<encoder>
+			<Pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{35} - %msg %n
+			</Pattern>
+		</encoder>
+	</appender> 	
+  	<appender name="hibernateSQLDailyRollingFileAppender" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<File>${LOG_PATH}/slf4j-hibernate-sql</File>
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<!-- daily rollover -->
+			<FileNamePattern>${LOG_PATH}/hibernate-sql.%d{yyyy-MM-dd}.log</FileNamePattern>
+			<!-- keep 30 days' worth of history -->
+			<maxHistory>30</maxHistory>
+		</rollingPolicy>
+		<encoder>
+			<Pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{35} - %msg %n
+			</Pattern>
+		</encoder>
+	</appender> 	
+
+	<logger name="com.thy.aodb" level="debug" additivity="false">
+		<appender-ref ref="dailyRollingFileAppender" />
+	</logger>
+
+	<root level="debug">
+		<appender-ref ref="errorDailyRollingFileAppender" />
+		<appender-ref ref="STDOUT" />
+	</root>
+	<logger name="org.springframework" level="info" additivity="false">
+		<appender-ref ref="frameworksDailyRollingFileAppender" />
+		<appender-ref ref="STDOUT" />
+	</logger>
+	<logger name="org.hibernate" level="info" additivity="false">
+		<appender-ref ref="frameworksDailyRollingFileAppender" />
+		<appender-ref ref="STDOUT" />
+	</logger>
+	<logger name="org.dozer" level="ERROR" additivity="false">
+		<appender-ref ref="frameworksDailyRollingFileAppender" />
+	</logger>
+	<logger name="org.hibernate.SQL" level="info" additivity="false">
+		<appender-ref ref="hibernateSQLDailyRollingFileAppender" />
+	</logger>
+	<!-- <logger name="org.hibernate.type" level="info" additivity="false">
+		<appender-ref ref="STDOUT" />
+	</logger> -->
+	<logger name="org.apache.cxf" level="debug" additivity="false">
+		<appender-ref ref="frameworksDailyRollingFileAppender" />
+	</logger>
+</configuration>
